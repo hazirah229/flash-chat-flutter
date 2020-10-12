@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flash_chat/constants.dart';
-import 'welcome_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatScreen extends StatefulWidget {
   static String id = 'chat_screen';
@@ -12,8 +12,10 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
 
+  final _firestore = Firestore.instance;
   final _auth = FirebaseAuth.instance;
   FirebaseUser loggedInUser;
+  String messageText;
 
   @override
   void initState() {
@@ -34,6 +36,22 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // void getMessages() async {
+  //   final messages = await _firestore.collection('messages').getDocuments();
+  //   for(var message in messages.documents) {
+  //     print(message.data);
+  //   }
+  // }
+
+  void messagesStream() async {
+    //snapshots return streams of querysnapshots
+    await for(var snapshot in _firestore.collection('messages').snapshots()) {
+      for (var message in snapshot.documents) {
+        print(message);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -45,21 +63,22 @@ class _ChatScreenState extends State<ChatScreen> {
               onPressed: () {
                 try {
                   if (loggedInUser != null) {
-                    showCupertinoModalPopup(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return CupertinoAlertDialog(
-                            title: new Text("Logging out.."),
-                            content: new Text("Hope to see you again soon!"),
-                            actions: <Widget>[
-                              new FlatButton(onPressed: () {
-                                _auth.signOut();
-                                Navigator.pushNamed(context, WelcomeScreen.id);
-                              }, child: new Text("log out")),
-                            ],
-                          );
-                        },
-                      );
+                    messagesStream();
+                    // showCupertinoModalPopup(
+                    //     context: context,
+                    //     builder: (BuildContext context) {
+                    //       return CupertinoAlertDialog(
+                    //         title: new Text("Logging out.."),
+                    //         content: new Text("Hope to see you again soon!"),
+                    //         actions: <Widget>[
+                    //           new FlatButton(onPressed: () {
+                              //   _auth.signOut();
+                              //   Navigator.pushNamed(context, WelcomeScreen.id);
+                              // }, child: new Text("log out")),
+                      //       ],
+                      //     );
+                      //   },
+                      // );
                   }
                 }catch(e) {
                   print(e);
@@ -75,6 +94,7 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            MessagesStream(firestore: _firestore,),
             Container(
               decoration: kMessageContainerDecoration,
               child: Row(
@@ -83,6 +103,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: TextField(
                       onChanged: (value) {
+                        messageText = value;
                         //Do something with the user input.
                       },
                       decoration: kMessageTextFieldDecoration,
@@ -90,6 +111,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   FlatButton(
                     onPressed: () {
+                      _firestore.collection('messages').add({
+                        'text' : messageText,
+                        'sender' : loggedInUser.email,
+                      });
                       //Implement send functionality.
                     },
                     child: Text(
@@ -102,6 +127,84 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class MessagesStream extends StatelessWidget {
+
+  MessagesStream({this.firestore});
+  final Firestore firestore;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: firestore.collection('messages').snapshots(),
+      builder: (context, snapshot){
+        if(!snapshot.hasData) {
+          return Center(
+            child: CircularProgressIndicator(
+              backgroundColor: Colors.lightBlueAccent,
+            ),
+          );
+        }
+        final messages = snapshot.data.documents;
+        List<MessageBubble> messageBubbles = [];
+        for(var message in messages) {
+          final messageText = message.data['text'];
+          final messageSender = message.data['sender'];
+
+          final messageBubble = MessageBubble(
+              sender: messageSender, text: messageText);
+          messageBubbles.add(messageBubble);
+        }
+        return Expanded(
+          child: ListView(
+            padding: EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
+            children: messageBubbles,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class MessageBubble extends StatelessWidget {
+
+  MessageBubble({this.sender, this.text});
+
+  final String sender;
+  final String text;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(10.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: <Widget>[
+          Text(
+            sender,
+            style: TextStyle(
+              fontSize: 12.0,
+              color: Colors.black45
+          ),),
+          Material(
+            elevation: 5.0,
+            color: Colors.lightBlueAccent,
+            borderRadius: BorderRadius.circular(30.0),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 20.0),
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20.0,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
