@@ -41,15 +41,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void messagesStream() async {
-    //snapshots return streams of querysnapshots
-    await for (var snapshot in _firestore.collection('messages').snapshots()) {
-      for (var message in snapshot.documents) {
-        print(message);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -61,7 +52,6 @@ class _ChatScreenState extends State<ChatScreen> {
               onPressed: () {
                 try {
                   if (loggedInUser != null) {
-                    messagesStream();
                     showCupertinoModalPopup(
                       context: context,
                       builder: (BuildContext context) {
@@ -72,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             new FlatButton(
                                 onPressed: () {
                                   _auth.signOut();
+                                  // Navigator.pop(context);
                                   Navigator.pushNamed(
                                       context, WelcomeScreen.id);
                                 },
@@ -143,7 +134,7 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 class MessagesStream extends StatelessWidget {
-  MessagesStream();
+  // MessagesStream();
   // final FirebaseUser loggedIn;
 
   getDateFormatted(var timeCreated) {
@@ -162,7 +153,7 @@ class MessagesStream extends StatelessWidget {
             ),
           );
         }
-        final messages = snapshot.data.documents;
+        final messages = snapshot.data.documents.reversed;
         List<MessageBubble> messageBubbles = [];
         for (var message in messages) {
           final messageText = message.data['text'];
@@ -181,6 +172,7 @@ class MessagesStream extends StatelessWidget {
         }
         return Expanded(
           child: ListView(
+            reverse: true,
             padding: EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
             children: messageBubbles,
           ),
@@ -228,7 +220,10 @@ class MessageBubble extends StatelessWidget {
         children: <Widget>[
           Text(
             sender,
-            style: TextStyle(fontSize: 10.0, color: Colors.black45),
+            style: TextStyle(
+              fontSize: 10.0,
+              color: Colors.black45,
+            ),
           ),
           Material(
             elevation: 5.0,
