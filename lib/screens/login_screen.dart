@@ -13,8 +13,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-
-  final _auth = FirebaseAuth.instance;  //_as private property
+  final _auth = FirebaseAuth.instance; //_as private property
   bool showSpinner = false;
   String emailL;
   String passwordL;
@@ -48,13 +47,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   emailL = value;
                   //Do something with the user input.
                 },
-                decoration: kTextFieldDecoration.copyWith(
-                    hintText: 'Enter your email'),
+                decoration:
+                    kTextFieldDecoration.copyWith(hintText: 'Enter your email'),
               ),
               SizedBox(
                 height: 8.0,
               ),
-              TextField(obscureText: true,
+              TextField(
+                obscureText: true,
                 textAlign: TextAlign.center,
                 onChanged: (value) {
                   passwordL = value;
@@ -66,34 +66,42 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 height: 24.0,
               ),
-              RoundedButton (
+              RoundedButton(
                 title: 'Log In',
                 colour: Colors.lightBlueAccent,
-                onPressed: () async { //async and await used to ensure new user are successfully created before executing next task
+                onPressed: () async {
+                  //async and await used to ensure new user are successfully created before executing next task
                   try {
                     setState(() {
                       showSpinner = true;
                     });
-                    final authenticateUser = await _auth.signInWithEmailAndPassword(email: emailL, password: passwordL);
-                    if(authenticateUser != null) {
+                    final authenticateUser =
+                        await _auth.signInWithEmailAndPassword(
+                            email: emailL, password: passwordL);
+                    if (authenticateUser != null) {
                       setState(() {
                         showSpinner = false;
                       });
                       showCupertinoModalPopup(
-                          context: context,
-                          builder: (BuildContext context) {
-                            return CupertinoAlertDialog(
-                              title: new Text("Welcome to Flash Chat!"),
-                              content: new Text("You will be directed to chat screen"),
-                              actions: <Widget> [
-                                new FlatButton(onPressed: () {Navigator.pushNamed(context, ChatScreen.id);}, child: new Text("Let's Go!")),
-                              ],
-                            );
-                          },
-                       );
+                        context: context,
+                        builder: (BuildContext context) {
+                          return CupertinoAlertDialog(
+                            title: new Text("Welcome to Flash Chat!"),
+                            content:
+                                new Text("You will be directed to chat screen"),
+                            actions: <Widget>[
+                              new FlatButton(
+                                  onPressed: () {
+                                    Navigator.pushNamed(context, ChatScreen.id);
+                                  },
+                                  child: new Text("Let's Go!")),
+                            ],
+                          );
+                        },
+                      );
                     }
                   } catch (e) {
-                    print (e);
+                    print(e);
                   }
                 },
               ),

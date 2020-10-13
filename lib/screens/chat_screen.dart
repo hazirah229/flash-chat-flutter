@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flash_chat/constants.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'welcome_screen.dart';
+
+final _firestore = Firestore.instance;
+FirebaseUser loggedInUser;
 
 class ChatScreen extends StatefulWidget {
   static String id = 'chat_screen';
@@ -11,23 +16,23 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-
-  final _firestore = Firestore.instance;
+  final messageTextController = TextEditingController();
   final _auth = FirebaseAuth.instance;
-  FirebaseUser loggedInUser;
+
   String messageText;
+  DateTime timeNow = new DateTime.now();
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     getCurrentUser();
   }
-  //checked if there's new user signed in (checked using teh auth obj)
+
+  //checked if there's new user signed in (checked using the auth obj)
   void getCurrentUser() async {
     try {
       final user = await _auth.currentUser();
-      if(user != null) {
+      if (user != null) {
         loggedInUser = user;
         print(loggedInUser.email);
       }
@@ -36,16 +41,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // void getMessages() async {
-  //   final messages = await _firestore.collection('messages').getDocuments();
-  //   for(var message in messages.documents) {
-  //     print(message.data);
-  //   }
-  // }
-
   void messagesStream() async {
     //snapshots return streams of querysnapshots
-    await for(var snapshot in _firestore.collection('messages').snapshots()) {
+    await for (var snapshot in _firestore.collection('messages').snapshots()) {
       for (var message in snapshot.documents) {
         print(message);
       }
@@ -64,23 +62,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 try {
                   if (loggedInUser != null) {
                     messagesStream();
-                    // showCupertinoModalPopup(
-                    //     context: context,
-                    //     builder: (BuildContext context) {
-                    //       return CupertinoAlertDialog(
-                    //         title: new Text("Logging out.."),
-                    //         content: new Text("Hope to see you again soon!"),
-                    //         actions: <Widget>[
-                    //           new FlatButton(onPressed: () {
-                              //   _auth.signOut();
-                              //   Navigator.pushNamed(context, WelcomeScreen.id);
-                              // }, child: new Text("log out")),
-                      //       ],
-                      //     );
-                      //   },
-                      // );
+                    showCupertinoModalPopup(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return CupertinoAlertDialog(
+                          title: new Text("Logging out.."),
+                          content: new Text("Hope to see you again soon!"),
+                          actions: <Widget>[
+                            new FlatButton(
+                                onPressed: () {
+                                  _auth.signOut();
+                                  Navigator.pushNamed(
+                                      context, WelcomeScreen.id);
+                                },
+                                child: new Text("log out")),
+                          ],
+                        );
+                      },
+                    );
                   }
-                }catch(e) {
+                } catch (e) {
                   print(e);
                 }
                 //Implement logout functionality
@@ -94,7 +95,9 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            MessagesStream(firestore: _firestore,),
+            MessagesStream(
+                // loggedIn: loggedInUser,
+                ),
             Container(
               decoration: kMessageContainerDecoration,
               child: Row(
@@ -102,6 +105,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: <Widget>[
                   Expanded(
                     child: TextField(
+                      controller: messageTextController,
                       onChanged: (value) {
                         messageText = value;
                         //Do something with the user input.
@@ -111,10 +115,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   FlatButton(
                     onPressed: () {
+                      messageTextController.clear();
                       _firestore.collection('messages').add({
-                        'text' : messageText,
-                        'sender' : loggedInUser.email,
+                        'text': messageText,
+                        'sender': loggedInUser.email,
+                        'timeCreated': Timestamp.now()
+                            .toDate()
+                            .toUtc()
+                            .add(new Duration(minutes: 480)),
                       });
+
                       //Implement send functionality.
                     },
                     child: Text(
@@ -133,16 +143,19 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 class MessagesStream extends StatelessWidget {
+  MessagesStream();
+  // final FirebaseUser loggedIn;
 
-  MessagesStream({this.firestore});
-  final Firestore firestore;
+  getDateFormatted(var timeCreated) {
+    return DateFormat('dd/MM/yyyy hh:mm').format(timeCreated.toDate());
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: firestore.collection('messages').snapshots(),
-      builder: (context, snapshot){
-        if(!snapshot.hasData) {
+      stream: _firestore.collection('messages').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
           return Center(
             child: CircularProgressIndicator(
               backgroundColor: Colors.lightBlueAccent,
@@ -151,12 +164,19 @@ class MessagesStream extends StatelessWidget {
         }
         final messages = snapshot.data.documents;
         List<MessageBubble> messageBubbles = [];
-        for(var message in messages) {
+        for (var message in messages) {
           final messageText = message.data['text'];
           final messageSender = message.data['sender'];
+          final messageCreated = message.data['timeCreated'];
+          final currUser = loggedInUser.email;
 
           final messageBubble = MessageBubble(
-              sender: messageSender, text: messageText);
+            sender: messageSender,
+            text: messageText,
+            isMe: currUser == messageSender,
+            // loggedInEmail: loggedInUser,
+            time: getDateFormatted(messageCreated),
+          );
           messageBubbles.add(messageBubble);
         }
         return Expanded(
@@ -171,28 +191,49 @@ class MessagesStream extends StatelessWidget {
 }
 
 class MessageBubble extends StatelessWidget {
-
-  MessageBubble({this.sender, this.text});
+  MessageBubble({this.sender, this.text, this.time, this.isMe});
 
   final String sender;
   final String text;
+  final String time;
+  // final FirebaseUser loggedInEmail;
+  final bool isMe;
+
+  BorderRadius getBorderBubblePosition(sender, loggedInUser) {
+    BorderRadius br;
+
+    if (sender == loggedInUser.email) {
+      br = BorderRadius.only(
+        topLeft: Radius.circular(30.0),
+        bottomLeft: Radius.circular(30.0),
+        bottomRight: Radius.circular(30.0),
+      );
+    } else {
+      br = BorderRadius.only(
+        topRight: Radius.circular(30.0),
+        bottomLeft: Radius.circular(30.0),
+        bottomRight: Radius.circular(30.0),
+      );
+    }
+    return br;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.all(10.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             sender,
-            style: TextStyle(
-              fontSize: 12.0,
-              color: Colors.black45
-          ),),
+            style: TextStyle(fontSize: 10.0, color: Colors.black45),
+          ),
           Material(
             elevation: 5.0,
-            color: Colors.lightBlueAccent,
-            borderRadius: BorderRadius.circular(30.0),
+            color: isMe ? Colors.lightBlueAccent : Colors.amber[800],
+            borderRadius: getBorderBubblePosition(sender, loggedInUser),
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 20.0),
               child: Text(
@@ -202,6 +243,13 @@ class MessageBubble extends StatelessWidget {
                   fontSize: 20.0,
                 ),
               ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              time,
+              style: TextStyle(fontSize: 8.0, color: Colors.black45),
             ),
           ),
         ],
